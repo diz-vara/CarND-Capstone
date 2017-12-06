@@ -24,7 +24,7 @@ class TLDetector(object):
         self.camera_image = None
         self.lights = []
 
-        cascade_name = 'c16x32w30d2_3.xml'
+        cascade_name = 'cComb16x32LBPw30d2_3.xml'
         self.cascade = cv2.CascadeClassifier(cascade_name)
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
@@ -39,6 +39,7 @@ class TLDetector(object):
         '''
         sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+        sub7 = rospy.Subscriber('/image_raw', Image, self.image_cb)
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
@@ -123,19 +124,22 @@ class TLDetector(object):
     #returns array of detected TLs
     def detect(self, image):
         img = cv2.resize(image,(800,600))
+        #cv2.imshow("img",img); #cv2.waitKey(20); 
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY )
-        res = self.cascade.detectMultiScale2(gray, 1.1, 2, 0, 
+        #cv2.imshow("gray",gray); cv2.waitKey(5); 
+        res = self.cascade.detectMultiScale2(gray, 1.1, 1, 0, 
                                              (16,32), 
-                                             (100,200))
+                                             (150,200))
         detected = res[0];
         images = []
+        img_out = img.copy();
         for result in detected:
             p0 = (result[0], result[1])
             p1 = (p0[0]+result[2], p0[1]+result[3])
-            cv2.rectangle(img, p0, p1, (0,0,255),2)
             images.append(cv2.resize(img[p0[1]:p1[1], p0[0]:p1[0],:],
                                      (16,32)))
-        cv2.imshow("detected",img)    
+            cv2.rectangle(img_out, p0, p1, (0,0,255),2)
+        cv2.imshow("detected",img_out)    
         cv2.waitKey(2)
         return images
         
@@ -148,12 +152,14 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
         """
         global cnt;
+        key = cv2.waitKey(10);
         light = None
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        print(cv_image.shape)
+        #cv2.imshow("cv_image",cv_image); cv2.waitKey(20); 
+        
 
         if SAVE_FRAMES: 
-            cv2.imshow("msg",cv_image); 
-            key = cv2.waitKey(20);
             if (key > 0 and key < 255):
                 fname = '/media/D/DIZ/out/tl/{:07d}.png'.format(cnt)
                 cv2.imwrite(fname, cv_image);
@@ -163,6 +169,12 @@ class TLDetector(object):
 
         #returns array of detected TLs
         detected = self.detect(cv_image)
+        
+        for img in detected:
+            fname = '/media/D/DIZ/out/tl/det-sim2/{:07d}.png'.format(cnt)
+            cv2.imwrite(fname, img);
+            cnt = cnt + 1
+            print (fname)
         
         #TODO: determine active color
 
@@ -181,7 +193,7 @@ class TLDetector(object):
 
 if __name__ == '__main__':
     try:
-        cnt = 0;
+        cnt = 200000;
         TLDetector()
     except rospy.ROSInterruptException:
         rospy.logerr('Could not start traffic node.')
